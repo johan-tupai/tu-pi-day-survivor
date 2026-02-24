@@ -79,71 +79,65 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
     ctx.restore();
   }
 
-  // Pickups
+  // Pickups (visuals are 2x size, hitbox unchanged)
   for (const pickup of state.pickups) {
     const sp = worldToScreen(pickup.pos, camera);
+    const vr = pickup.radius * 2; // visual radius = 2x
     switch (pickup.type) {
       case 'xp': {
-        // Golden π symbol
         ctx.fillStyle = '#fbbf24';
         ctx.beginPath();
-        ctx.arc(sp.x, sp.y, pickup.radius + 2, 0, Math.PI * 2);
+        ctx.arc(sp.x, sp.y, vr + 2, 0, Math.PI * 2);
         ctx.fill();
-        drawPiSymbol(ctx, sp.x, sp.y + 1, 11, '#451a03');
+        drawPiSymbol(ctx, sp.x, sp.y + 1, 22, '#451a03');
         break;
       }
       case 'health_pie': {
-        // Apple shape with π
         ctx.fillStyle = '#ef4444';
         ctx.beginPath();
-        ctx.arc(sp.x - 3, sp.y, pickup.radius, 0, Math.PI * 2);
-        ctx.arc(sp.x + 3, sp.y, pickup.radius, 0, Math.PI * 2);
+        ctx.arc(sp.x - 6, sp.y, vr, 0, Math.PI * 2);
+        ctx.arc(sp.x + 6, sp.y, vr, 0, Math.PI * 2);
         ctx.fill();
-        // Stem
         ctx.strokeStyle = '#15803d';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(sp.x, sp.y - pickup.radius);
-        ctx.lineTo(sp.x + 2, sp.y - pickup.radius - 5);
+        ctx.moveTo(sp.x, sp.y - vr);
+        ctx.lineTo(sp.x + 4, sp.y - vr - 10);
         ctx.stroke();
-        // Leaf
         ctx.fillStyle = '#22c55e';
         ctx.beginPath();
-        ctx.ellipse(sp.x + 4, sp.y - pickup.radius - 3, 4, 2, 0.5, 0, Math.PI * 2);
+        ctx.ellipse(sp.x + 8, sp.y - vr - 6, 8, 4, 0.5, 0, Math.PI * 2);
         ctx.fill();
-        drawPiSymbol(ctx, sp.x, sp.y + 1, 10, '#fff');
+        drawPiSymbol(ctx, sp.x, sp.y + 1, 20, '#fff');
         break;
       }
       case 'timer_extension': {
-        // Banana shape with π
         ctx.fillStyle = '#facc15';
         ctx.save();
         ctx.translate(sp.x, sp.y);
         ctx.rotate(-0.3);
         ctx.beginPath();
-        ctx.ellipse(0, 0, pickup.radius + 4, pickup.radius - 2, 0, 0, Math.PI);
+        ctx.ellipse(0, 0, vr + 8, vr - 4, 0, 0, Math.PI);
         ctx.fill();
         ctx.strokeStyle = '#a16207';
         ctx.lineWidth = 1.5;
         ctx.stroke();
         ctx.restore();
-        drawPiSymbol(ctx, sp.x, sp.y - 1, 9, '#451a03');
+        drawPiSymbol(ctx, sp.x, sp.y - 1, 18, '#451a03');
         break;
       }
       case 'boss_durian': {
-        // Durian with π - spiky green ball
-        const r = pickup.radius;
+        const r = vr;
         ctx.fillStyle = '#65a30d';
         ctx.beginPath();
         ctx.arc(sp.x, sp.y, r, 0, Math.PI * 2);
         ctx.fill();
-        // Spikes
         ctx.fillStyle = '#3f6212';
         const spikes = 10;
         for (let i = 0; i < spikes; i++) {
           const a = (i / spikes) * Math.PI * 2;
-          const sx2 = sp.x + Math.cos(a) * (r + 5);
-          const sy2 = sp.y + Math.sin(a) * (r + 5);
+          const sx2 = sp.x + Math.cos(a) * (r + 10);
+          const sy2 = sp.y + Math.sin(a) * (r + 10);
           ctx.beginPath();
           ctx.moveTo(
             sp.x + Math.cos(a - 0.2) * r,
@@ -156,7 +150,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
           );
           ctx.fill();
         }
-        drawPiSymbol(ctx, sp.x, sp.y + 1, 12, '#fff');
+        drawPiSymbol(ctx, sp.x, sp.y + 1, 24, '#fff');
         break;
       }
     }
