@@ -42,7 +42,7 @@ function getXpMultiplier(timeRemaining: number): number {
   return 1;
 }
 
-function createEnemy(type: EnemyType, playerPos: Vec2, canvasW: number, canvasH: number): Enemy {
+function createEnemy(type: EnemyType, playerPos: Vec2, canvasW: number, canvasH: number, bossKills: number = 0): Enemy {
   const angle = Math.random() * Math.PI * 2;
   const spawnDist = Math.max(canvasW, canvasH) * 0.6;
   const pos = {
@@ -50,31 +50,36 @@ function createEnemy(type: EnemyType, playerPos: Vec2, canvasW: number, canvasH:
     y: playerPos.y + Math.sin(angle) * spawnDist,
   };
 
+  // Enemy stat boost: 10% per boss killed
+  const boost = 1 + bossKills * 0.1;
+
   switch (type) {
     case 'bug':
-      return { pos, radius: 10, hp: 30, maxHp: 30, speed: 80 + Math.random() * 30, damage: 8, type, xpValue: 5 };
+      return { pos, radius: 10, hp: Math.round(30 * boost), maxHp: Math.round(30 * boost), speed: (80 + Math.random() * 30) * boost, damage: Math.round(8 * boost), type, xpValue: 5 };
     case 'rat':
-      return { pos, radius: 14, hp: 60, maxHp: 60, speed: 55 + Math.random() * 20, damage: 12, type, xpValue: 10 };
+      return { pos, radius: 14, hp: Math.round(60 * boost), maxHp: Math.round(60 * boost), speed: (55 + Math.random() * 20) * boost, damage: Math.round(12 * boost), type, xpValue: 10 };
     case 'snake':
-      return { pos, radius: 18, hp: 120, maxHp: 120, speed: 35 + Math.random() * 15, damage: 20, type, xpValue: 20 };
-    case 'boss':
-      // Boss: 3.14× the snake stats
+      return { pos, radius: 18, hp: Math.round(120 * boost), maxHp: Math.round(120 * boost), speed: (35 + Math.random() * 15) * boost, damage: Math.round(20 * boost), type, xpValue: 20 };
+    case 'boss': {
+      // Boss = 5x the strongest normal enemy (snake), plus boss kill boost
+      const mult = 5 * boost;
       return {
         pos,
-        radius: Math.round(18 * PI),
-        hp: Math.round(120 * PI),
-        maxHp: Math.round(120 * PI),
+        radius: Math.round(18 * mult),
+        hp: Math.round(120 * mult),
+        maxHp: Math.round(120 * mult),
         speed: 30,
-        damage: Math.round(20 * PI),
+        damage: Math.round(20 * mult),
         type,
         xpValue: 100,
       };
+    }
   }
 }
 
 function getShootInterval(multiNutLevel: number): number {
-  // Each level reduces interval by 15%, min 0.3s
-  return Math.max(0.3, BASE_SHOOT_INTERVAL * Math.pow(0.85, multiNutLevel));
+  // Each level reduces interval by 5%, min 0.3s
+  return Math.max(0.3, BASE_SHOOT_INTERVAL * Math.pow(0.95, multiNutLevel));
 }
 
 export function updateGame(
@@ -97,10 +102,10 @@ export function updateGame(
     return { levelUp: false };
   }
 
-  // Boss spawn at 0:30
-  if (state.timeRemaining <= 30 && !state.bossSpawned) {
-    state.bossSpawned = true;
-    state.enemies.push(createEnemy('boss', player.pos, canvasW, canvasH));
+  // Boss spawn every 100 kills
+  while (state.killCount >= state.nextBossAt) {
+    state.enemies.push(createEnemy('boss', player.pos, canvasW, canvasH, state.bossKills));
+    state.nextBossAt += 100;
   }
 
   // Player movement
@@ -121,13 +126,13 @@ export function updateGame(
     const type = getEnemyType(state.timeRemaining);
     const count = state.timeRemaining < 60 ? 2 : 1;
     for (let i = 0; i < count; i++) {
-      state.enemies.push(createEnemy(type, player.pos, canvasW, canvasH));
+      state.enemies.push(createEnemy(type, player.pos, canvasW, canvasH, state.bossKills));
     }
     if (state.timeRemaining <= 120 && Math.random() < 0.3) {
-      state.enemies.push(createEnemy('bug', player.pos, canvasW, canvasH));
+      state.enemies.push(createEnemy('bug', player.pos, canvasW, canvasH, state.bossKills));
     }
     if (state.timeRemaining <= 60 && Math.random() < 0.2) {
-      state.enemies.push(createEnemy('rat', player.pos, canvasW, canvasH));
+      state.enemies.push(createEnemy('rat', player.pos, canvasW, canvasH, state.bossKills));
     }
     state.spawnTimer = getSpawnInterval(state.timeRemaining);
   }
@@ -275,18 +280,19 @@ export function updateGame(
         lifetime: PICKUP_LIFETIME,
       });
 
-      // Boss drops durian
+      // Boss drops durian + grants stat boost
       if (e.type === 'boss') {
+        state.bossKills++;
         state.pickups.push({
           pos: { x: e.pos.x + 20, y: e.pos.y },
           radius: 12,
           type: 'boss_durian',
           value: 0,
-          lifetime: 30,
+          lifetime: PICKUP_LIFETIME / 2,
         });
       } else {
-        // 10% health pie
-        if (Math.random() < 0.10) {
+        // 5% health pie
+        if (Math.random() < 0.05) {
           state.pickups.push({
             pos: { x: e.pos.x + 15, y: e.pos.y + 10 },
             radius: 8,
@@ -295,8 +301,8 @@ export function updateGame(
             lifetime: PICKUP_LIFETIME,
           });
         }
-        // 2% timer extension
-        if (Math.random() < 0.02) {
+        // 1% timer extension
+        if (Math.random() < 0.01) {
           state.pickups.push({
             pos: { x: e.pos.x - 15, y: e.pos.y + 10 },
             radius: 8,

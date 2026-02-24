@@ -86,6 +86,8 @@ export interface GameState {
   spawnTimer: number;
   lastTime: number;
   bossSpawned: boolean;
+  bossKills: number;
+  nextBossAt: number;
 }
 
 export function createInitialState(): GameState {
@@ -121,5 +123,7 @@ export function createInitialState(): GameState {
     spawnTimer: 0,
     lastTime: 0,
     bossSpawned: false,
+    bossKills: 0,
+    nextBossAt: 100,
   };
 }
