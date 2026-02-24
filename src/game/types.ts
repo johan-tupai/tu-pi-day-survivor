@@ -16,15 +16,17 @@ export interface Player extends Entity {
   xpToNext: number;
   level: number;
   projectileCount: number;
+  multiNutLevel: number;
   hasOrbitingLeaf: boolean;
   leafAngle: number;
-  hasGarlicAura: boolean;
-  garlicRadius: number;
-  garlicDamage: number;
+  hasPieCrust: boolean;
+  pieCrustLevel: number;
+  pieCrustRadius: number;
+  pieCrustDamage: number;
   invincibleTimer: number;
 }
 
-export type EnemyType = 'bug' | 'rat' | 'snake';
+export type EnemyType = 'bug' | 'rat' | 'snake' | 'boss';
 
 export interface Enemy extends Entity {
   hp: number;
@@ -41,7 +43,10 @@ export interface Projectile extends Entity {
   lifetime: number;
 }
 
-export interface XpNut extends Entity {
+export type PickupType = 'xp' | 'health_pie' | 'timer_extension' | 'boss_durian';
+
+export interface Pickup extends Entity {
+  type: PickupType;
   value: number;
   lifetime: number;
 }
@@ -61,17 +66,17 @@ export interface Upgrade {
 }
 
 export const UPGRADES: Upgrade[] = [
-  { id: 'multi_nut', name: 'Multi-Nut', description: 'Throw +1 projectile', icon: '🌰' },
+  { id: 'multi_nut', name: 'Multi-Nut', description: 'Throw +1 projectile & faster fire', icon: '🌰' },
   { id: 'orbiting_leaf', name: 'Orbiting Leaf', description: 'Shield that damages enemies', icon: '🍃' },
   { id: 'coffee_bean', name: 'Coffee Bean', description: '+20% Movement Speed', icon: '☕' },
-  { id: 'garlic_aura', name: 'Garlic Aura', description: 'Damages nearby enemies', icon: '🧄' },
+  { id: 'pie_crust', name: 'Pie Crust', description: 'Damages nearby enemies & attracts drops', icon: '🥧' },
 ];
 
 export interface GameState {
   player: Player;
   enemies: Enemy[];
   projectiles: Projectile[];
-  xpNuts: XpNut[];
+  pickups: Pickup[];
   damageNumbers: DamageNumber[];
   camera: Vec2;
   timeRemaining: number;
@@ -80,6 +85,7 @@ export interface GameState {
   shootTimer: number;
   spawnTimer: number;
   lastTime: number;
+  bossSpawned: boolean;
 }
 
 export function createInitialState(): GameState {
@@ -94,16 +100,18 @@ export function createInitialState(): GameState {
       xpToNext: 20,
       level: 1,
       projectileCount: 1,
+      multiNutLevel: 0,
       hasOrbitingLeaf: false,
       leafAngle: 0,
-      hasGarlicAura: false,
-      garlicRadius: 80,
-      garlicDamage: 15,
+      hasPieCrust: false,
+      pieCrustLevel: 0,
+      pieCrustRadius: 80,
+      pieCrustDamage: 15,
       invincibleTimer: 0,
     },
     enemies: [],
     projectiles: [],
-    xpNuts: [],
+    pickups: [],
     damageNumbers: [],
     camera: { x: 0, y: 0 },
     timeRemaining: 180,
@@ -112,5 +120,6 @@ export function createInitialState(): GameState {
     shootTimer: 0,
     spawnTimer: 0,
     lastTime: 0,
+    bossSpawned: false,
   };
 }

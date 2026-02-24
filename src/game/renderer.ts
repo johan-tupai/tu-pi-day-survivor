@@ -21,6 +21,16 @@ function worldToScreen(pos: Vec2, camera: Vec2): Vec2 {
   return { x: pos.x - camera.x, y: pos.y - camera.y };
 }
 
+function drawPiSymbol(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, color: string) {
+  ctx.save();
+  ctx.font = `bold ${size}px serif`;
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('π', x, y);
+  ctx.restore();
+}
+
 export function render(ctx: CanvasRenderingContext2D, state: GameState, w: number, h: number) {
   ctx.clearRect(0, 0, w, h);
 
@@ -29,39 +39,138 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
 
   const { camera, player } = state;
 
-  // Garlic aura
-  if (player.hasGarlicAura) {
+  // Pie Crust aura
+  if (player.hasPieCrust) {
     const sp = worldToScreen(player.pos, camera);
-    const grad = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, player.garlicRadius);
-    grad.addColorStop(0, 'rgba(192, 132, 252, 0.12)');
-    grad.addColorStop(1, 'rgba(192, 132, 252, 0)');
+    // Fill
+    const grad = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, player.pieCrustRadius);
+    grad.addColorStop(0, 'rgba(210, 160, 80, 0.08)');
+    grad.addColorStop(0.7, 'rgba(210, 160, 80, 0.05)');
+    grad.addColorStop(1, 'rgba(180, 120, 50, 0)');
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(sp.x, sp.y, player.garlicRadius, 0, Math.PI * 2);
+    ctx.arc(sp.x, sp.y, player.pieCrustRadius, 0, Math.PI * 2);
     ctx.fill();
+
+    // Crust edge - scalloped pie crust pattern
+    ctx.save();
+    ctx.strokeStyle = '#c8940a';
+    ctx.lineWidth = 4;
+    ctx.setLineDash([]);
+    const segments = 24;
+    const bumpSize = 6;
+    ctx.beginPath();
+    for (let i = 0; i <= segments; i++) {
+      const angle = (i / segments) * Math.PI * 2;
+      const midAngle = ((i + 0.5) / segments) * Math.PI * 2;
+      const r = player.pieCrustRadius;
+      const px = sp.x + Math.cos(angle) * r;
+      const py = sp.y + Math.sin(angle) * r;
+      const cpx = sp.x + Math.cos(midAngle) * (r + bumpSize);
+      const cpy = sp.y + Math.sin(midAngle) * (r + bumpSize);
+      if (i === 0) {
+        ctx.moveTo(px, py);
+      } else {
+        ctx.quadraticCurveTo(cpx, cpy, px, py);
+      }
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
   }
 
-  // XP Nuts
-  for (const nut of state.xpNuts) {
-    const sp = worldToScreen(nut.pos, camera);
-    ctx.fillStyle = '#fbbf24';
-    ctx.beginPath();
-    ctx.arc(sp.x, sp.y, nut.radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#b45309';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+  // Pickups
+  for (const pickup of state.pickups) {
+    const sp = worldToScreen(pickup.pos, camera);
+    switch (pickup.type) {
+      case 'xp': {
+        // Golden π symbol
+        ctx.fillStyle = '#fbbf24';
+        ctx.beginPath();
+        ctx.arc(sp.x, sp.y, pickup.radius + 2, 0, Math.PI * 2);
+        ctx.fill();
+        drawPiSymbol(ctx, sp.x, sp.y + 1, 11, '#451a03');
+        break;
+      }
+      case 'health_pie': {
+        // Apple shape with π
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.arc(sp.x - 3, sp.y, pickup.radius, 0, Math.PI * 2);
+        ctx.arc(sp.x + 3, sp.y, pickup.radius, 0, Math.PI * 2);
+        ctx.fill();
+        // Stem
+        ctx.strokeStyle = '#15803d';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(sp.x, sp.y - pickup.radius);
+        ctx.lineTo(sp.x + 2, sp.y - pickup.radius - 5);
+        ctx.stroke();
+        // Leaf
+        ctx.fillStyle = '#22c55e';
+        ctx.beginPath();
+        ctx.ellipse(sp.x + 4, sp.y - pickup.radius - 3, 4, 2, 0.5, 0, Math.PI * 2);
+        ctx.fill();
+        drawPiSymbol(ctx, sp.x, sp.y + 1, 10, '#fff');
+        break;
+      }
+      case 'timer_extension': {
+        // Banana shape with π
+        ctx.fillStyle = '#facc15';
+        ctx.save();
+        ctx.translate(sp.x, sp.y);
+        ctx.rotate(-0.3);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, pickup.radius + 4, pickup.radius - 2, 0, 0, Math.PI);
+        ctx.fill();
+        ctx.strokeStyle = '#a16207';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.restore();
+        drawPiSymbol(ctx, sp.x, sp.y - 1, 9, '#451a03');
+        break;
+      }
+      case 'boss_durian': {
+        // Durian with π - spiky green ball
+        const r = pickup.radius;
+        ctx.fillStyle = '#65a30d';
+        ctx.beginPath();
+        ctx.arc(sp.x, sp.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        // Spikes
+        ctx.fillStyle = '#3f6212';
+        const spikes = 10;
+        for (let i = 0; i < spikes; i++) {
+          const a = (i / spikes) * Math.PI * 2;
+          const sx2 = sp.x + Math.cos(a) * (r + 5);
+          const sy2 = sp.y + Math.sin(a) * (r + 5);
+          ctx.beginPath();
+          ctx.moveTo(
+            sp.x + Math.cos(a - 0.2) * r,
+            sp.y + Math.sin(a - 0.2) * r
+          );
+          ctx.lineTo(sx2, sy2);
+          ctx.lineTo(
+            sp.x + Math.cos(a + 0.2) * r,
+            sp.y + Math.sin(a + 0.2) * r
+          );
+          ctx.fill();
+        }
+        drawPiSymbol(ctx, sp.x, sp.y + 1, 12, '#fff');
+        break;
+      }
+    }
   }
 
   // Enemies
   for (const e of state.enemies) {
     const sp = worldToScreen(e.pos, camera);
     let color: string;
-    let eyeColor = '#fff';
     switch (e.type) {
       case 'bug': color = '#ef4444'; break;
       case 'rat': color = '#a855f7'; break;
       case 'snake': color = '#14b8a6'; break;
+      case 'boss': color = '#dc2626'; break;
     }
 
     // Body
@@ -69,31 +178,45 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
     ctx.beginPath();
     ctx.arc(sp.x, sp.y, e.radius, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = e.type === 'boss' ? 'rgba(255,50,50,0.6)' : 'rgba(0,0,0,0.3)';
+    ctx.lineWidth = e.type === 'boss' ? 3 : 2;
     ctx.stroke();
 
+    // Boss glow
+    if (e.type === 'boss') {
+      ctx.save();
+      ctx.shadowColor = '#ff0000';
+      ctx.shadowBlur = 20;
+      ctx.strokeStyle = 'rgba(255,0,0,0.4)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, e.radius + 4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // Eyes
-    ctx.fillStyle = eyeColor;
+    const eyeScale = e.type === 'boss' ? 0.2 : 0.3;
+    ctx.fillStyle = '#fff';
     ctx.beginPath();
-    ctx.arc(sp.x - e.radius * 0.3, sp.y - e.radius * 0.2, e.radius * 0.25, 0, Math.PI * 2);
-    ctx.arc(sp.x + e.radius * 0.3, sp.y - e.radius * 0.2, e.radius * 0.25, 0, Math.PI * 2);
+    ctx.arc(sp.x - e.radius * eyeScale, sp.y - e.radius * 0.2, e.radius * 0.25, 0, Math.PI * 2);
+    ctx.arc(sp.x + e.radius * eyeScale, sp.y - e.radius * 0.2, e.radius * 0.25, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#000';
     ctx.beginPath();
-    ctx.arc(sp.x - e.radius * 0.3, sp.y - e.radius * 0.2, e.radius * 0.12, 0, Math.PI * 2);
-    ctx.arc(sp.x + e.radius * 0.3, sp.y - e.radius * 0.2, e.radius * 0.12, 0, Math.PI * 2);
+    ctx.arc(sp.x - e.radius * eyeScale, sp.y - e.radius * 0.2, e.radius * 0.12, 0, Math.PI * 2);
+    ctx.arc(sp.x + e.radius * eyeScale, sp.y - e.radius * 0.2, e.radius * 0.12, 0, Math.PI * 2);
     ctx.fill();
 
     // HP bar
     if (e.hp < e.maxHp) {
       const barW = e.radius * 2;
-      const barH = 3;
+      const barH = e.type === 'boss' ? 5 : 3;
       const bx = sp.x - barW / 2;
       const by = sp.y - e.radius - 8;
       ctx.fillStyle = '#333';
       ctx.fillRect(bx, by, barW, barH);
-      ctx.fillStyle = '#ef4444';
+      ctx.fillStyle = e.type === 'boss' ? '#ff4444' : '#ef4444';
       ctx.fillRect(bx, by, barW * (e.hp / e.maxHp), barH);
     }
   }
@@ -130,7 +253,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
     ctx.restore();
   }
 
-  // Player (squirrel-like shape)
+  // Player (squirrel)
   {
     const sp = worldToScreen(player.pos, camera);
     const flash = player.invincibleTimer > 0 && Math.floor(player.invincibleTimer * 10) % 2 === 0;

@@ -96,7 +96,6 @@ const GameCanvas: React.FC = () => {
         const dt = Math.min((now - state.lastTime) / 1000, 0.05);
         state.lastTime = now;
 
-        // Keyboard input
         const keys = keysRef.current;
         const kbInput = { x: 0, y: 0 };
         if (keys.has('a') || keys.has('arrowleft')) kbInput.x -= 1;
@@ -104,7 +103,6 @@ const GameCanvas: React.FC = () => {
         if (keys.has('w') || keys.has('arrowup')) kbInput.y -= 1;
         if (keys.has('s') || keys.has('arrowdown')) kbInput.y += 1;
 
-        // Combine keyboard + joystick
         const combinedInput = {
           x: kbInput.x || inputRef.current.x,
           y: kbInput.y || inputRef.current.y,
@@ -113,7 +111,6 @@ const GameCanvas: React.FC = () => {
         const result = updateGame(state, dt, combinedInput, canvas.width, canvas.height, playPopSound);
 
         if (result.levelUp) {
-          // Pick 3 random upgrades
           const shuffled = [...UPGRADES].sort(() => Math.random() - 0.5);
           setUpgradeChoices(shuffled.slice(0, 3));
           setPhase('levelup');
@@ -124,7 +121,6 @@ const GameCanvas: React.FC = () => {
           setPhase(currentPhase);
         }
 
-        // Update HUD data periodically
         setHudData({
           time: state.timeRemaining,
           kills: state.killCount,

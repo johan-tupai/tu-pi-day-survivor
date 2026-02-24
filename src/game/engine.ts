@@ -1,15 +1,16 @@
-import { GameState, Enemy, EnemyType, Vec2 } from './types';
+import { GameState, Enemy, EnemyType, Vec2, Pickup } from './types';
 
-const SHOOT_INTERVAL = 1.0;
+const BASE_SHOOT_INTERVAL = 1.0;
 const PROJECTILE_SPEED = 300;
 const PROJECTILE_DAMAGE = 20;
 const PROJECTILE_LIFETIME = 2.0;
-const XP_NUT_LIFETIME = 10.0;
+const PICKUP_LIFETIME = 10.0;
 const LEAF_ORBIT_RADIUS = 50;
-const LEAF_ORBIT_SPEED = 3;
+const LEAF_ORBIT_SPEED = 3 * 3.14;
 const LEAF_DAMAGE = 30;
 const PICKUP_RADIUS = 40;
 const ENEMY_DAMAGE_COOLDOWN = 0.5;
+const PI = 3.14;
 
 function dist(a: Vec2, b: Vec2): number {
   const dx = a.x - b.x;
@@ -35,6 +36,12 @@ function getEnemyType(timeRemaining: number): EnemyType {
   return 'snake';
 }
 
+function getXpMultiplier(timeRemaining: number): number {
+  if (timeRemaining <= 60) return PI * PI; // ~9.86x after 2:00
+  if (timeRemaining <= 120) return PI;      // ~3.14x after 1:00 left shown as 2:00 on clock
+  return 1;
+}
+
 function createEnemy(type: EnemyType, playerPos: Vec2, canvasW: number, canvasH: number): Enemy {
   const angle = Math.random() * Math.PI * 2;
   const spawnDist = Math.max(canvasW, canvasH) * 0.6;
@@ -50,7 +57,24 @@ function createEnemy(type: EnemyType, playerPos: Vec2, canvasW: number, canvasH:
       return { pos, radius: 14, hp: 60, maxHp: 60, speed: 55 + Math.random() * 20, damage: 12, type, xpValue: 10 };
     case 'snake':
       return { pos, radius: 18, hp: 120, maxHp: 120, speed: 35 + Math.random() * 15, damage: 20, type, xpValue: 20 };
+    case 'boss':
+      // Boss: 3.14× the snake stats
+      return {
+        pos,
+        radius: Math.round(18 * PI),
+        hp: Math.round(120 * PI),
+        maxHp: Math.round(120 * PI),
+        speed: 30,
+        damage: Math.round(20 * PI),
+        type,
+        xpValue: 100,
+      };
   }
+}
+
+function getShootInterval(multiNutLevel: number): number {
+  // Each level reduces interval by 15%, min 0.3s
+  return Math.max(0.3, BASE_SHOOT_INTERVAL * Math.pow(0.85, multiNutLevel));
 }
 
 export function updateGame(
@@ -73,6 +97,12 @@ export function updateGame(
     return { levelUp: false };
   }
 
+  // Boss spawn at 0:30
+  if (state.timeRemaining <= 30 && !state.bossSpawned) {
+    state.bossSpawned = true;
+    state.enemies.push(createEnemy('boss', player.pos, canvasW, canvasH));
+  }
+
   // Player movement
   const moveDir = normalize(input);
   player.pos.x += moveDir.x * player.speed * dt;
@@ -89,12 +119,10 @@ export function updateGame(
   state.spawnTimer -= dt;
   if (state.spawnTimer <= 0) {
     const type = getEnemyType(state.timeRemaining);
-    // Spawn a few extras as time goes on
     const count = state.timeRemaining < 60 ? 2 : 1;
     for (let i = 0; i < count; i++) {
       state.enemies.push(createEnemy(type, player.pos, canvasW, canvasH));
     }
-    // Also mix in earlier types
     if (state.timeRemaining <= 120 && Math.random() < 0.3) {
       state.enemies.push(createEnemy('bug', player.pos, canvasW, canvasH));
     }
@@ -112,10 +140,10 @@ export function updateGame(
   }
 
   // Auto-shoot
+  const shootInterval = getShootInterval(player.multiNutLevel);
   state.shootTimer -= dt;
   if (state.shootTimer <= 0 && state.enemies.length > 0) {
-    state.shootTimer = SHOOT_INTERVAL;
-    // Find nearest enemies
+    state.shootTimer = shootInterval;
     const sorted = [...state.enemies].sort((a, b) => dist(a.pos, player.pos) - dist(b.pos, player.pos));
     for (let i = 0; i < player.projectileCount && i < sorted.length; i++) {
       const target = sorted[i];
@@ -144,7 +172,6 @@ export function updateGame(
       x: player.pos.x + Math.cos(player.leafAngle) * LEAF_ORBIT_RADIUS,
       y: player.pos.y + Math.sin(player.leafAngle) * LEAF_ORBIT_RADIUS,
     };
-    // Damage enemies touching leaf
     for (const e of state.enemies) {
       if (dist(leafPos, e.pos) < e.radius + 10) {
         e.hp -= LEAF_DAMAGE * dt;
@@ -158,19 +185,32 @@ export function updateGame(
     }
   }
 
-  // Garlic aura
-  if (player.hasGarlicAura) {
+  // Pie Crust (formerly Garlic Aura)
+  if (player.hasPieCrust) {
+    const dmgMultiplier = player.pieCrustLevel;
+    const actualDamage = player.pieCrustDamage * dmgMultiplier;
     for (const e of state.enemies) {
-      if (dist(player.pos, e.pos) < player.garlicRadius + e.radius) {
-        e.hp -= player.garlicDamage * dt;
+      if (dist(player.pos, e.pos) < player.pieCrustRadius + e.radius) {
+        e.hp -= actualDamage * dt;
         if (Math.random() < 0.1) {
           state.damageNumbers.push({
             pos: { x: e.pos.x + (Math.random() - 0.5) * 20, y: e.pos.y - 10 },
-            value: Math.round(player.garlicDamage * dt * 10),
+            value: Math.round(actualDamage * dt * 10),
             timer: 0.5,
             color: '#c084fc',
           });
         }
+      }
+    }
+
+    // Attract pickups within pie crust radius
+    for (const p of state.pickups) {
+      const d = dist(player.pos, p.pos);
+      if (d < player.pieCrustRadius && d > PICKUP_RADIUS) {
+        const dir = normalize({ x: player.pos.x - p.pos.x, y: player.pos.y - p.pos.y });
+        const attractSpeed = 120;
+        p.pos.x += dir.x * attractSpeed * dt;
+        p.pos.y += dir.y * attractSpeed * dt;
       }
     }
   }
@@ -217,17 +257,56 @@ export function updateGame(
     }
   }
 
-  // Remove dead enemies, spawn XP
+  // XP multiplier
+  const xpMult = getXpMultiplier(state.timeRemaining);
+
+  // Remove dead enemies, spawn drops
   const alive: typeof state.enemies = [];
   for (const e of state.enemies) {
     if (e.hp <= 0) {
       state.killCount++;
-      state.xpNuts.push({
+
+      // XP drop (always)
+      state.pickups.push({
         pos: { x: e.pos.x, y: e.pos.y },
         radius: 6,
-        value: e.xpValue,
-        lifetime: XP_NUT_LIFETIME,
+        type: 'xp',
+        value: Math.round(e.xpValue * xpMult),
+        lifetime: PICKUP_LIFETIME,
       });
+
+      // Boss drops durian
+      if (e.type === 'boss') {
+        state.pickups.push({
+          pos: { x: e.pos.x + 20, y: e.pos.y },
+          radius: 12,
+          type: 'boss_durian',
+          value: 0,
+          lifetime: 30,
+        });
+      } else {
+        // 10% health pie
+        if (Math.random() < 0.10) {
+          state.pickups.push({
+            pos: { x: e.pos.x + 15, y: e.pos.y + 10 },
+            radius: 8,
+            type: 'health_pie',
+            value: 0.5,
+            lifetime: PICKUP_LIFETIME,
+          });
+        }
+        // 2% timer extension
+        if (Math.random() < 0.02) {
+          state.pickups.push({
+            pos: { x: e.pos.x - 15, y: e.pos.y + 10 },
+            radius: 8,
+            type: 'timer_extension',
+            value: 15,
+            lifetime: PICKUP_LIFETIME,
+          });
+        }
+      }
+
       playSound();
     } else {
       alive.push(e);
@@ -235,17 +314,50 @@ export function updateGame(
   }
   state.enemies = alive;
 
-  // Collect XP nuts
-  const remainingNuts = state.xpNuts.filter((n) => {
-    n.lifetime -= dt;
-    if (n.lifetime <= 0) return false;
-    if (dist(player.pos, n.pos) < PICKUP_RADIUS) {
-      player.xp += n.value;
+  // Collect pickups
+  state.pickups = state.pickups.filter((p) => {
+    p.lifetime -= dt;
+    if (p.lifetime <= 0) return false;
+    if (dist(player.pos, p.pos) < PICKUP_RADIUS) {
+      switch (p.type) {
+        case 'xp':
+          player.xp += p.value;
+          break;
+        case 'health_pie':
+          player.hp = Math.min(player.maxHp, player.hp + player.maxHp * p.value);
+          state.damageNumbers.push({
+            pos: { x: player.pos.x, y: player.pos.y - 25 },
+            value: Math.round(player.maxHp * p.value),
+            timer: 1.0,
+            color: '#22c55e',
+          });
+          break;
+        case 'timer_extension':
+          state.timeRemaining += p.value;
+          state.damageNumbers.push({
+            pos: { x: player.pos.x, y: player.pos.y - 30 },
+            value: p.value,
+            timer: 1.0,
+            color: '#38bdf8',
+          });
+          break;
+        case 'boss_durian':
+          // Kill all visible enemies
+          for (const e of state.enemies) {
+            e.hp = 0;
+          }
+          state.damageNumbers.push({
+            pos: { x: player.pos.x, y: player.pos.y - 35 },
+            value: 9999,
+            timer: 1.5,
+            color: '#f59e0b',
+          });
+          break;
+      }
       return false;
     }
     return true;
   });
-  state.xpNuts = remainingNuts;
 
   // Level up check
   if (player.xp >= player.xpToNext) {
@@ -266,8 +378,8 @@ export function updateGame(
   // Cleanup projectiles
   state.projectiles = state.projectiles.filter((p) => p.lifetime > 0);
 
-  // Cull far-away enemies
-  state.enemies = state.enemies.filter((e) => dist(e.pos, player.pos) < 1200);
+  // Cull far-away enemies (but not boss)
+  state.enemies = state.enemies.filter((e) => e.type === 'boss' || dist(e.pos, player.pos) < 1200);
 
   return { levelUp: false };
 }
@@ -277,6 +389,7 @@ export function applyUpgrade(state: GameState, upgradeId: string) {
   switch (upgradeId) {
     case 'multi_nut':
       player.projectileCount++;
+      player.multiNutLevel++;
       break;
     case 'orbiting_leaf':
       player.hasOrbitingLeaf = true;
@@ -284,12 +397,13 @@ export function applyUpgrade(state: GameState, upgradeId: string) {
     case 'coffee_bean':
       player.speed *= 1.2;
       break;
-    case 'garlic_aura':
-      if (player.hasGarlicAura) {
-        player.garlicRadius += 20;
-        player.garlicDamage += 5;
+    case 'pie_crust':
+      if (player.hasPieCrust) {
+        player.pieCrustLevel++;
+        player.pieCrustRadius += 20;
       } else {
-        player.hasGarlicAura = true;
+        player.hasPieCrust = true;
+        player.pieCrustLevel = 1;
       }
       break;
   }
