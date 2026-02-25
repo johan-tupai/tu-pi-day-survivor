@@ -82,15 +82,26 @@ function getShootInterval(multiNutLevel: number): number {
   return Math.max(0.3, BASE_SHOOT_INTERVAL * Math.pow(0.95, multiNutLevel));
 }
 
+export interface GameEvents {
+  levelUp: boolean;
+  shot: boolean;
+  playerDamaged: boolean;
+  healed: boolean;
+  timerExtended: boolean;
+  screenCleared: boolean;
+  bossSpawned: boolean;
+  enemiesKilled: number;
+}
+
 export function updateGame(
   state: GameState,
   dt: number,
   input: Vec2,
   canvasW: number,
   canvasH: number,
-  playSound: () => void
-): { levelUp: boolean } {
-  if (state.gamePhase !== 'playing') return { levelUp: false };
+): GameEvents {
+  const events: GameEvents = { levelUp: false, shot: false, playerDamaged: false, healed: false, timerExtended: false, screenCleared: false, bossSpawned: false, enemiesKilled: 0 };
+  if (state.gamePhase !== 'playing') return events;
 
   const { player } = state;
 
@@ -99,13 +110,14 @@ export function updateGame(
   if (state.timeRemaining <= 0) {
     state.timeRemaining = 0;
     state.gamePhase = 'victory';
-    return { levelUp: false };
+    return events;
   }
 
   // Boss spawn every 100 kills
   while (state.killCount >= state.nextBossAt) {
     state.enemies.push(createEnemy('boss', player.pos, canvasW, canvasH, state.bossKills));
     state.nextBossAt += 100;
+    events.bossSpawned = true;
   }
 
   // Player movement
@@ -149,6 +161,7 @@ export function updateGame(
   state.shootTimer -= dt;
   if (state.shootTimer <= 0 && state.enemies.length > 0) {
     state.shootTimer = shootInterval;
+    events.shot = true;
     const sorted = [...state.enemies].sort((a, b) => dist(a.pos, player.pos) - dist(b.pos, player.pos));
     for (let i = 0; i < player.projectileCount && i < sorted.length; i++) {
       const target = sorted[i];
@@ -252,10 +265,11 @@ export function updateGame(
           timer: 0.8,
           color: '#ef4444',
         });
+        events.playerDamaged = true;
         if (player.hp <= 0) {
           player.hp = 0;
           state.gamePhase = 'gameover';
-          return { levelUp: false };
+          return events;
         }
         break;
       }
@@ -313,7 +327,7 @@ export function updateGame(
         }
       }
 
-      playSound();
+      events.enemiesKilled++;
     } else {
       alive.push(e);
     }
@@ -337,6 +351,7 @@ export function updateGame(
             timer: 1.0,
             color: '#22c55e',
           });
+          events.healed = true;
           break;
         case 'timer_extension':
           state.timeRemaining += p.value;
@@ -346,8 +361,8 @@ export function updateGame(
             timer: 1.0,
             color: '#38bdf8',
           });
+          events.timerExtended = true;
           break;
-        case 'boss_durian':
           // Kill all visible enemies
           for (const e of state.enemies) {
             e.hp = 0;
@@ -358,6 +373,7 @@ export function updateGame(
             timer: 1.5,
             color: '#f59e0b',
           });
+          events.screenCleared = true;
           break;
       }
       return false;
@@ -371,7 +387,8 @@ export function updateGame(
     player.level++;
     player.xpToNext = Math.floor(player.xpToNext * 1.5);
     state.gamePhase = 'levelup';
-    return { levelUp: true };
+    events.levelUp = true;
+    return events;
   }
 
   // Update damage numbers
@@ -387,7 +404,7 @@ export function updateGame(
   // Cull far-away enemies (but not boss)
   state.enemies = state.enemies.filter((e) => e.type === 'boss' || dist(e.pos, player.pos) < 1200);
 
-  return { levelUp: false };
+  return events;
 }
 
 export function applyUpgrade(state: GameState, upgradeId: string) {
