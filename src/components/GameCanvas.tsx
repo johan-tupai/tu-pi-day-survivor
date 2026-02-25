@@ -2,7 +2,6 @@ import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { GameState, createInitialState, UPGRADES } from '@/game/types';
 import { updateGame, applyUpgrade } from '@/game/engine';
 import { render } from '@/game/renderer';
-import { gameAudio } from '@/game/audio';
 import GameHUD from './GameHUD';
 import GameMenu from './GameMenu';
 import GameOver from './GameOver';
@@ -24,11 +23,30 @@ const GameCanvas: React.FC = () => {
     setIsMobile('ontouchstart' in window || navigator.maxTouchPoints > 0);
   }, []);
 
-  const startGame = useCallback(() => {
-    gameAudio.init();
-    gameAudio.startMusic();
-    gameAudio.preloadVoices();
+  const popSoundRef = useRef<AudioContext | null>(null);
 
+  const playPopSound = useCallback(() => {
+    try {
+      if (!popSoundRef.current) {
+        popSoundRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const ctx = popSoundRef.current;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.setValueAtTime(600, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.15);
+    } catch {
+      // Audio not available
+    }
+  }, []);
+
+  const startGame = useCallback(() => {
     const s = createInitialState();
     s.gamePhase = 'playing';
     s.lastTime = performance.now();
@@ -38,11 +56,6 @@ const GameCanvas: React.FC = () => {
 
   const handleUpgrade = useCallback((upgradeId: string) => {
     applyUpgrade(stateRef.current, upgradeId);
-    // Announce the ability name in 80s voice
-    const upgrade = UPGRADES.find(u => u.id === upgradeId);
-    if (upgrade) {
-      gameAudio.announceAbility(upgrade.name);
-    }
     setPhase('playing');
   }, []);
 
@@ -95,19 +108,9 @@ const GameCanvas: React.FC = () => {
           y: kbInput.y || inputRef.current.y,
         };
 
-        const events = updateGame(state, dt, combinedInput, canvas.width, canvas.height);
+        const result = updateGame(state, dt, combinedInput, canvas.width, canvas.height, playPopSound);
 
-        // Audio events
-        if (events.shot) gameAudio.playShot();
-        if (events.playerDamaged) gameAudio.playDamage();
-        if (events.healed) gameAudio.playHeal();
-        if (events.timerExtended) gameAudio.playTimerExtend();
-        if (events.screenCleared) gameAudio.playScreenClear();
-        if (events.enemiesKilled > 0) gameAudio.playEnemyDeath();
-        if (events.bossSpawned) gameAudio.announceBossSpawn();
-
-        if (events.levelUp) {
-          gameAudio.announceLevelUp();
+        if (result.levelUp) {
           const shuffled = [...UPGRADES].sort(() => Math.random() - 0.5);
           setUpgradeChoices(shuffled.slice(0, 3));
           setPhase('levelup');
@@ -115,7 +118,6 @@ const GameCanvas: React.FC = () => {
 
         const currentPhase = state.gamePhase as GameState['gamePhase'];
         if (currentPhase === 'gameover' || currentPhase === 'victory') {
-          gameAudio.stopMusic();
           setPhase(currentPhase);
         }
 
@@ -140,7 +142,7 @@ const GameCanvas: React.FC = () => {
       cancelAnimationFrame(rafRef.current);
       window.removeEventListener('resize', resize);
     };
-  }, []);
+  }, [playPopSound]);
 
   const handleJoystick = useCallback((x: number, y: number) => {
     inputRef.current = { x, y };
