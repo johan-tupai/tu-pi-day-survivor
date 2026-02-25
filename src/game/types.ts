@@ -19,6 +19,7 @@ export interface Player extends Entity {
   multiNutLevel: number;
   hasOrbitingLeaf: boolean;
   leafAngle: number;
+  leafLevel: number;
   hasPieCrust: boolean;
   pieCrustLevel: number;
   pieCrustRadius: number;
@@ -105,6 +106,7 @@ export function createInitialState(): GameState {
       multiNutLevel: 0,
       hasOrbitingLeaf: false,
       leafAngle: 0,
+      leafLevel: 0,
       hasPieCrust: false,
       pieCrustLevel: 0,
       pieCrustRadius: 80,

@@ -5,9 +5,9 @@ const PROJECTILE_SPEED = 300;
 const PROJECTILE_DAMAGE = 20;
 const PROJECTILE_LIFETIME = 2.0;
 const PICKUP_LIFETIME = 10.0;
-const LEAF_ORBIT_RADIUS = 50;
+const LEAF_BASE_ORBIT_RADIUS = 50;
 const LEAF_ORBIT_SPEED = 3 * 3.14;
-const LEAF_DAMAGE = 30;
+const LEAF_BASE_DAMAGE = 5;
 const PICKUP_RADIUS = 40;
 const ENEMY_DAMAGE_COOLDOWN = 0.5;
 const PI = 3.14;
@@ -172,17 +172,23 @@ export function updateGame(
 
   // Orbiting leaf
   if (player.hasOrbitingLeaf) {
+    const leafOrbitRadius = player.hasPieCrust ? player.pieCrustRadius : LEAF_BASE_ORBIT_RADIUS;
+    const leafDamage = LEAF_BASE_DAMAGE * player.leafLevel;
     player.leafAngle += LEAF_ORBIT_SPEED * dt;
     const leafPos = {
-      x: player.pos.x + Math.cos(player.leafAngle) * LEAF_ORBIT_RADIUS,
-      y: player.pos.y + Math.sin(player.leafAngle) * LEAF_ORBIT_RADIUS,
+      x: player.pos.x + Math.cos(player.leafAngle) * leafOrbitRadius,
+      y: player.pos.y + Math.sin(player.leafAngle) * leafOrbitRadius,
     };
     for (const e of state.enemies) {
+      if (e.hp <= 0) continue;
       if (dist(leafPos, e.pos) < e.radius + 10) {
-        e.hp -= LEAF_DAMAGE * dt;
+        e.hp -= leafDamage * dt;
+        if (e.hp <= 0) {
+          (e as any)._killedByLeaf = true;
+        }
         state.damageNumbers.push({
           pos: { x: e.pos.x, y: e.pos.y - 10 },
-          value: Math.round(LEAF_DAMAGE * dt),
+          value: Math.round(leafDamage * dt),
           timer: 0.6,
           color: '#4ade80',
         });
@@ -301,10 +307,20 @@ export function updateGame(
             lifetime: PICKUP_LIFETIME,
           });
         }
-        // 1% timer extension
+        // 1% timer extension (normal drop)
         if (Math.random() < 0.01) {
           state.pickups.push({
             pos: { x: e.pos.x - 15, y: e.pos.y + 10 },
+            radius: 8,
+            type: 'timer_extension',
+            value: 15,
+            lifetime: PICKUP_LIFETIME,
+          });
+        }
+        // 1% timer extension from leaf kill
+        if ((e as any)._killedByLeaf && Math.random() < 0.01) {
+          state.pickups.push({
+            pos: { x: e.pos.x + 15, y: e.pos.y - 10 },
             radius: 8,
             type: 'timer_extension',
             value: 15,
@@ -399,6 +415,7 @@ export function applyUpgrade(state: GameState, upgradeId: string) {
       break;
     case 'orbiting_leaf':
       player.hasOrbitingLeaf = true;
+      player.leafLevel++;
       break;
     case 'coffee_bean':
       player.speed *= 1.2;

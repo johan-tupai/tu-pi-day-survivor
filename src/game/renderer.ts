@@ -229,9 +229,10 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
 
   // Orbiting leaf
   if (player.hasOrbitingLeaf) {
+    const leafOrbitRadius = player.hasPieCrust ? player.pieCrustRadius : 50;
     const leafPos = {
-      x: player.pos.x + Math.cos(player.leafAngle) * 50,
-      y: player.pos.y + Math.sin(player.leafAngle) * 50,
+      x: player.pos.x + Math.cos(player.leafAngle) * leafOrbitRadius,
+      y: player.pos.y + Math.sin(player.leafAngle) * leafOrbitRadius,
     };
     const sp = worldToScreen(leafPos, camera);
     ctx.save();
